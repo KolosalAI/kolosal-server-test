@@ -119,5 +119,5 @@ class DocumentIngestionTest(KolosalTestBase):
         result = response.json()
 
         print("✅ Document ingestion completed!")
-        print(f"📄 Ingested documents: {result.get('ingested_documents', [])}")
+        print(f"📄 Response: {result}")
         print("")
