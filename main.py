@@ -5,6 +5,7 @@ from tests.engine_tests.embedding_test import EmbeddingTest
 from tests.retrieval_tests.parse_pdf_test import ParsePDFTest
 from tests.retrieval_tests.parse_docx_test import ParseDOCXTest
 from tests.retrieval_tests.document_ingestion_test import DocumentIngestionTest
+from tests.retrieval_tests.document_retrieval_test import DocumentRetrievalTest
 
 LLM_MODEL = "qwen3-0.6b"  # Default model for testing
 # Default embedding model for testing
@@ -95,3 +96,19 @@ parse_docx_test.concurrent_parse_docx(
 document_ingestion_test = DocumentIngestionTest()
 
 document_ingestion_test.test_ingest_document() # Use default documents
+
+# Test document retrieval
+document_retrieval_test = DocumentRetrievalTest()
+
+# Basic document retrieval test
+document_retrieval_test.retrieve_documents(
+    query="smartphone",
+    limit=5,
+    score_threshold=0.5
+)
+
+# Concurrent document retrieval test
+document_retrieval_test.concurrent_retrieve_documents()
+
+# Custom concurrent retrieval test
+document_retrieval_test.custom_concurrent_retrieve()
