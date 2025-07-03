@@ -1,6 +1,7 @@
 """Main test script for Kolosal Server."""
 
 from tests.engine_tests.completion_test import CompletionTest
+from tests.engine_tests.embedding_test import EmbeddingTest
 
 LLM_MODEL = "qwen3-0.6b"  # Default model for testing
 # Default embedding model for testing
@@ -28,3 +29,24 @@ completion_test.concurrent_completion(
     model_name=LLM_MODEL,
     temperature=0.7,
     max_tokens=128)
+
+# Test engine embedding
+embedding_test = EmbeddingTest()
+
+# Basic embedding test
+embedding_test.basic_embedding(
+    model_name=EMBEDDING_MODEL,
+    input_text="Hello, world!"
+)
+
+# Concurrent embedding test
+embedding_test.concurrent_embedding(
+    model_name=EMBEDDING_MODEL,
+    input_texts=[
+        "Hello, world!",
+        "The quick brown fox jumps over the lazy dog.",
+        "Machine learning is transforming technology.",
+        "Natural language processing enables computers to understand text.",
+        "Embeddings convert text into numerical vectors."
+    ]
+)
