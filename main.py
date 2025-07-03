@@ -2,6 +2,7 @@
 
 from tests.engine_tests.completion_test import CompletionTest
 from tests.engine_tests.embedding_test import EmbeddingTest
+from tests.retrieval_tests.parse_pdf_test import ParsePDFTest
 
 LLM_MODEL = "qwen3-0.6b"  # Default model for testing
 # Default embedding model for testing
@@ -48,5 +49,24 @@ embedding_test.concurrent_embedding(
         "Machine learning is transforming technology.",
         "Natural language processing enables computers to understand text.",
         "Embeddings convert text into numerical vectors."
+    ]
+)
+
+# Test PDF parsing
+parse_pdf_test = ParsePDFTest()
+
+# Basic PDF parsing test
+parse_pdf_test.test_parse_pdf(
+    path="test_files/test_pdf.pdf"
+)
+
+# Concurrent PDF parsing test
+parse_pdf_test.concurrent_parse_pdf(
+    pdf_paths=[
+        "test_files/test_pdf1.pdf",
+        "test_files/test_pdf2.pdf",
+        "test_files/test_pdf3.pdf",
+        "test_files/test_pdf4.pdf",
+        "test_files/test_pdf5.pdf"
     ]
 )
