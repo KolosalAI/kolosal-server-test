@@ -3,6 +3,7 @@
 from tests.engine_tests.completion_test import CompletionTest
 from tests.engine_tests.embedding_test import EmbeddingTest
 from tests.retrieval_tests.parse_pdf_test import ParsePDFTest
+from tests.retrieval_tests.parse_docx_test import ParseDOCXTest
 
 LLM_MODEL = "qwen3-0.6b"  # Default model for testing
 # Default embedding model for testing
@@ -68,5 +69,23 @@ parse_pdf_test.concurrent_parse_pdf(
         "test_files/test_pdf3.pdf",
         "test_files/test_pdf4.pdf",
         "test_files/test_pdf5.pdf"
+    ]
+)
+
+# Test DOCX parsing
+parse_docx_test = ParseDOCXTest()
+
+# Basic DOCX parsing test
+parse_docx_test.test_parse_docx(
+    path="test_files/test_docx.docx"
+)
+# Concurrent DOCX parsing test
+parse_docx_test.concurrent_parse_docx(
+    docx_paths=[
+        "test_files/test_docx1.docx",
+        "test_files/test_docx2.docx",
+        "test_files/test_docx3.docx",
+        "test_files/test_docx4.docx",
+        "test_files/test_docx5.docx"
     ]
 )
