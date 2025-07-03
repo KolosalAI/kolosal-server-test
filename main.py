@@ -4,6 +4,7 @@ from tests.engine_tests.completion_test import CompletionTest
 from tests.engine_tests.embedding_test import EmbeddingTest
 from tests.retrieval_tests.parse_pdf_test import ParsePDFTest
 from tests.retrieval_tests.parse_docx_test import ParseDOCXTest
+from tests.retrieval_tests.document_ingestion_test import DocumentIngestionTest
 
 LLM_MODEL = "qwen3-0.6b"  # Default model for testing
 # Default embedding model for testing
@@ -89,3 +90,8 @@ parse_docx_test.concurrent_parse_docx(
         "test_files/test_docx5.docx"
     ]
 )
+
+# Test document ingestion
+document_ingestion_test = DocumentIngestionTest()
+
+document_ingestion_test.test_ingest_document() # Use default documents
