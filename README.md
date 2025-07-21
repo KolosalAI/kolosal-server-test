@@ -17,6 +17,7 @@ This is the comprehensive test suite for [Kolosal Server](https://github.com/Kol
 - A running instance of [Kolosal Server](https://github.com/KolosalAI/kolosal-server)
 - Access to the server's API endpoints (default: `http://localhost:8084`)
 
+
 ## Installation
 
 1. **Clone the repository:**
@@ -28,11 +29,13 @@ This is the comprehensive test suite for [Kolosal Server](https://github.com/Kol
 
 2. **Install dependencies:**
 
+   You can use [uv](https://github.com/astral-sh/uv) (recommended for speed) or pip:
+
    ```bash
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt
    ```
 
-   Or using a virtual environment (recommended):
+   Or using a virtual environment and pip:
 
    ```bash
    python -m venv venv
@@ -40,6 +43,53 @@ This is the comprehensive test suite for [Kolosal Server](https://github.com/Kol
    # source venv/bin/activate  # On macOS/Linux
    pip install -r requirements.txt
    ```
+
+## Configuration
+
+1. **Environment Variables:**
+
+   Copy `.env.template` to `.env` and fill in the required values for your environment:
+
+   ```bash
+   copy .env.template .env  # On Windows
+   # cp .env.template .env  # On macOS/Linux
+   ```
+
+   Edit `.env` to set paths, ports, and other configuration as needed.
+
+2. **(Optional) Launch All Services:**
+
+   You can use the provided batch script to launch Qdrant, Kolosal Server, and the test suite in separate terminals:
+
+   ```bash
+   ./launch_all.bat
+   ```
+
+   This script loads environment variables from `.env` and starts all required services and tests.
+
+## Usage
+
+### Running All Tests
+
+To run the complete test suite:
+
+```bash
+uv run python main.py
+```
+
+Or, if not using uv:
+
+```bash
+python main.py
+```
+
+This will execute all tests in sequence:
+1. LLM completion tests (basic and streaming)
+2. Embedding generation tests
+3. PDF parsing tests
+4. DOCX parsing tests  
+5. Document ingestion tests
+6. Document retrieval tests
 
 ## Configuration
 
