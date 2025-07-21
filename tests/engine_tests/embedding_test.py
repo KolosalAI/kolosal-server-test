@@ -11,30 +11,39 @@ class EmbeddingTest(KolosalTestBase):
 
     def basic_embedding(self,
                         model_name="text-embedding-ada-002",
-                        input_text: Optional[str] = "Hello, world!") -> None:
+                        input_text: Optional[str] = "Hello, world!") -> bool:
         """Test creating an embedding."""
         # Status Report
         print(f"🚀 Testing embedding with model: {model_name}")
         print("⏳ Sending request...")
 
-        initial_time = time.time()
-        response = self.client.embeddings.create(
-            model=model_name,
-            input=input_text
-        )
-        elapsed_time = time.time() - initial_time
+        try:
+            initial_time = time.time()
+            response = self.client.embeddings.create(
+                model=model_name,
+                input=input_text
+            )
+            elapsed_time = time.time() - initial_time
 
-        # Status Report
-        print(f"✅ Response received!")
-        print(f"Input text: {input_text}")
-        print(f"Embedding dimensions: {len(response.data[0].embedding)}")
-        print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
-        print(f"📊 Usage: {response.usage.total_tokens} tokens")
-        print("")
+            # Status Report
+            print(f"✅ Response received!")
+            print(f"Input text: {input_text}")
+            print(f"Embedding dimensions: {len(response.data[0].embedding)}")
+            print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
+            print(f"📊 Usage: {response.usage.total_tokens} tokens")
+            print("")
+            
+            # Return True if we have a valid embedding with expected structure
+            return bool(response.data and len(response.data) > 0 and response.data[0].embedding)
+            
+        except Exception as e:
+            print(f"❌ Basic embedding failed: {str(e)}")
+            print("")
+            return False
 
     def concurrent_embedding(self,
                              model_name="text-embedding-ada-002",
-                             input_texts: Optional[List[str]] = None) -> None:
+                             input_texts: Optional[List[str]] = None) -> bool:
         """Test concurrent embedding requests using asyncio."""
 
         if input_texts is None:
@@ -50,39 +59,54 @@ class EmbeddingTest(KolosalTestBase):
             f"🚀 Testing {len(input_texts)} concurrent embeddings with model: {model_name}")
         print("⏳ Sending concurrent requests...")
 
-        async def single_request(text, request_id):
-            start_time = time.time()
-            response = await self.async_client.embeddings.create(
-                model=model_name,
-                input=text
-            )
-            elapsed_time = time.time() - start_time
-            embedding_dims = len(response.data[0].embedding)
-            total_tokens = response.usage.total_tokens if response.usage else 0
-            return request_id, elapsed_time, embedding_dims, total_tokens, text
+        try:
+            async def single_request(text, request_id):
+                start_time = time.time()
+                response = await self.async_client.embeddings.create(
+                    model=model_name,
+                    input=text
+                )
+                elapsed_time = time.time() - start_time
+                embedding_dims = len(response.data[0].embedding)
+                total_tokens = response.usage.total_tokens if response.usage else 0
+                return request_id, elapsed_time, embedding_dims, total_tokens, text
 
-        async def run_concurrent_requests():
-            start_time = time.time()
-            results = await asyncio.gather(*[single_request(text, i+1) for i, text in enumerate(input_texts)])
-            total_time = time.time() - start_time
-            return results, total_time
+            async def run_concurrent_requests():
+                start_time = time.time()
+                results = await asyncio.gather(*[single_request(text, i+1) for i, text in enumerate(input_texts)])
+                total_time = time.time() - start_time
+                return results, total_time
 
-        results, total_time = asyncio.run(run_concurrent_requests())
+            results, total_time = asyncio.run(run_concurrent_requests())
 
-        results.sort(key=lambda x: x[0])
+            results.sort(key=lambda x: x[0])
 
-        print("✅ All responses received!")
-        total_tokens = 0
-        for request_id, elapsed_time, embedding_dims, tokens, text in results:
+            print("✅ All responses received!")
+            total_tokens = 0
+            successful_requests = 0
+            
+            for request_id, elapsed_time, embedding_dims, tokens, text in results:
+                print(
+                    f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📏 {embedding_dims} dims, 📊 {tokens} tokens")
+                print(f"Input: {text}")
+                print("")
+                total_tokens += tokens
+                if embedding_dims > 0:  # Count successful embeddings
+                    successful_requests += 1
+
             print(
-                f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📏 {embedding_dims} dims, 📊 {tokens} tokens")
-            print(f"Input: {text}")
+                f"📊 Average time per request: {sum(result[1] for result in results) / len(results):.2f}s")
+            print(
+                f"📊 Total concurrent execution time: {total_time:.2f} seconds")
+            print(f"📊 Total tokens processed: {total_tokens}")
+            print(f"📊 Successful requests: {successful_requests}/{len(input_texts)}")
             print("")
-            total_tokens += tokens
-
-        print(
-            f"📊 Average time per request: {sum(result[1] for result in results) / len(results):.2f}s")
-        print(
-            f"📊 Total concurrent execution time: {total_time:.2f} seconds")
-        print(f"📊 Total tokens processed: {total_tokens}")
-        print("")
+            
+            # Return True if at least 80% of requests succeeded
+            success_rate = successful_requests / len(input_texts)
+            return success_rate >= 0.8
+            
+        except Exception as e:
+            print(f"❌ Concurrent embedding failed: {str(e)}")
+            print("")
+            return False

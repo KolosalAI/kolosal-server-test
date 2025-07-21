@@ -13,6 +13,3 @@ PyPDF2>=3.0.0
 
 # Document processing (for DOCX files)
 python-docx>=0.8.11
-
-# Testing and async support
-asyncio-compat>=0.1.0

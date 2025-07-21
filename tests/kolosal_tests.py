@@ -9,7 +9,7 @@ class KolosalTestBase():
     client: OpenAI
     async_client: AsyncOpenAI
 
-    def __init__(self, base_url: Optional[str] = "http://localhost:8084",
+    def __init__(self, base_url: Optional[str] = "http://localhost:8080",
                  api_key: Optional[str] = "TEST_API_KEY") -> None:
         """Initialize the KolosalTestBase with optional base URL and API key."""
         self.client = OpenAI(
