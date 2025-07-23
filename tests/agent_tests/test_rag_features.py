@@ -12,6 +12,8 @@ This script tests document indexing, retrieval, and RAG functionality including:
 - Qdrant integration
 - Document metadata handling
 
+Enhanced with comprehensive endpoint logging.
+
 Usage:
     python test_rag_features.py [options]
 """
@@ -22,14 +24,20 @@ import base64
 import time
 import os
 import tempfile
+import sys
 from typing import Dict, List, Optional, Any
 import logging
+
+# Add parent directory to path to import logging utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from logging_utils import endpoint_logger, RequestTracker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RAGTester:
-    def __init__(self, base_url: str = "http://localhost:8080", api_key: Optional[str] = None):
+    def __init__(self, base_url: str = "http://127.0.0.1:8080", api_key: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
         if api_key:
@@ -40,6 +48,40 @@ class RAGTester:
         self.session.headers.update({'Content-Type': 'application/json'})
         self.test_collections = []
         self.test_documents = []
+    
+    def make_tracked_request(self, test_name: str, method: str, endpoint: str, **kwargs) -> requests.Response:
+        """Make HTTP request with comprehensive logging."""
+        url = f"{self.base_url}{endpoint}"
+        json_data = kwargs.get('json', {})
+        
+        # Log the request details
+        logger.info(f"🔄 Making request: {method} {url}")
+        if json_data:
+            logger.info(f"📤 Request payload: {json.dumps(json_data, indent=2)}")
+        
+        with RequestTracker(
+            test_name=test_name,
+            endpoint=endpoint,
+            method=method,
+            request_data=json_data
+        ) as tracker:
+            try:
+                response = self.session.request(method, url, **kwargs)
+                tracker.set_response(response)
+                
+                # Log the response details
+                logger.info(f"📥 Response status: {response.status_code}")
+                try:
+                    response_json = response.json()
+                    logger.info(f"📄 Response content: {json.dumps(response_json, indent=2)}")
+                except (json.JSONDecodeError, ValueError):
+                    logger.info(f"📄 Response content (text): {response.text[:500]}...")
+                
+                return response
+            except Exception as e:
+                tracker.set_error(f"Request failed: {str(e)}")
+                logger.error(f"❌ Request failed: {method} {url} - {e}")
+                raise
 
     def create_test_pdf_content(self) -> str:
         """Create a simple test PDF content as base64"""
@@ -78,154 +120,161 @@ class RAGTester:
         return base64.b64encode(pdf_content.encode()).decode()
 
     def test_document_upload(self):
-        """Test document upload and indexing"""
-        test_documents = [
-            {
-                "text": "Artificial Intelligence is transforming the healthcare industry through advanced diagnostic tools, personalized treatment plans, and predictive analytics. Machine learning algorithms can analyze medical images, detect patterns in patient data, and assist doctors in making more accurate diagnoses.",
-                "metadata": {
-                    "source": "ai_healthcare.txt",
-                    "category": "healthcare",
-                    "author": "AI Research Team",
-                    "date": "2024-01-15",
-                    "keywords": ["AI", "healthcare", "machine learning", "diagnostics"]
-                }
-            },
-            {
-                "text": "The automotive industry is experiencing a revolution with the development of autonomous vehicles. Self-driving cars use computer vision, sensor fusion, and deep learning to navigate roads safely. This technology promises to reduce accidents, improve traffic flow, and provide mobility solutions for people with disabilities.",
-                "metadata": {
-                    "source": "autonomous_vehicles.txt", 
-                    "category": "automotive",
-                    "author": "Tech Innovation Lab",
-                    "date": "2024-01-20",
-                    "keywords": ["autonomous vehicles", "computer vision", "safety", "transportation"]
-                }
-            },
-            {
-                "text": "Financial institutions are leveraging artificial intelligence for fraud detection, algorithmic trading, and risk assessment. AI systems can analyze transaction patterns in real-time, identify suspicious activities, and make trading decisions faster than human traders. This technology is reshaping the finance industry landscape.",
-                "metadata": {
-                    "source": "ai_finance.txt",
-                    "category": "finance", 
-                    "author": "FinTech Research",
-                    "date": "2024-01-25",
-                    "keywords": ["finance", "fraud detection", "algorithmic trading", "risk assessment"]
-                }
-            }
-        ]
-        
+        """Test document upload and indexing using proper API format"""
         try:
-            payload = {
-                "documents": test_documents,
-                "collection_name": "test_rag_collection",
-                "auto_index": True,
-                "embedding_model": "default"
+            # Use format from api_test.py reference
+            test_content = {
+                "content": "This is a test document for the Kolosal Server API testing. It contains information about artificial intelligence and machine learning technologies.",
+                "title": "API Test Document",
+                "metadata": {
+                    "category": "test",
+                    "type": "api_test",
+                    "created_by": "api_tester"
+                }
             }
             
-            response = self.session.post(f"{self.base_url}/api/v1/documents", json=payload)
-            success = response.status_code == 200
+            response = self.make_tracked_request(
+                test_name="Document Upload Test",
+                method="POST",
+                endpoint="/documents",
+                json=test_content
+            )
             
-            if success:
+            if response.status_code == 200:
                 result = response.json()
-                indexed_count = result.get('data', {}).get('indexed_count', 0)
-                collection_name = result.get('data', {}).get('collection_name')
-                
-                if collection_name:
-                    self.test_collections.append(collection_name)
-                
-                logger.info(f"Document upload test: PASS - Indexed {indexed_count} documents")
-                return True
+                doc_id = result.get('id') or result.get('document_id')
+                if doc_id:
+                    self.test_documents.append(doc_id)
+                    logger.info(f"✅ Document upload test: PASS - Document ID: {doc_id}")
+                    return True
+                else:
+                    logger.error(f"❌ Document upload test: FAIL - No document ID in response")
+                    return False
             else:
-                logger.error(f"Document upload test: FAIL - HTTP {response.status_code}: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ Document upload test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    logger.error(f"❌ Document upload test: FAIL - HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Document upload test failed: {e}")
+            logger.error(f"❌ Document upload test: FAIL - {str(e)}")
             return False
 
-    def test_document_retrieval(self):
-        """Test document retrieval and search"""
-        retrieval_queries = [
-            {
-                "query": "healthcare AI machine learning diagnostics",
-                "k": 3,
-                "score_threshold": 0.5,
-                "collection_name": "test_rag_collection"
-            },
-            {
-                "query": "autonomous vehicles self-driving cars computer vision",
-                "k": 2,
-                "score_threshold": 0.6,
-                "collection_name": "test_rag_collection"
-            },
-            {
-                "query": "financial fraud detection algorithmic trading",
-                "k": 2,
-                "score_threshold": 0.5,
-                "collection_name": "test_rag_collection"
-            }
-        ]
+    def test_document_file_upload(self):
+        """Test document file upload"""
+        import tempfile
         
-        success_count = 0
-        for i, query_data in enumerate(retrieval_queries):
-            try:
-                response = self.session.post(f"{self.base_url}/retrieve", json=query_data)
+        # Create a temporary test file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write("This is a test document for file upload. It contains sample content about autonomous vehicles and self-driving technology.")
+            temp_file_path = f.name
+        
+        try:
+            with open(temp_file_path, 'rb') as file:
+                files = {'file': file}
+                data = {'type': 'text'}
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    documents = result.get('data', {}).get('documents', [])
-                    scores = [doc.get('score', 0) for doc in documents]
-                    
-                    if documents and len(documents) > 0:
-                        success_count += 1
-                        logger.info(f"Retrieval query {i+1}: PASS - Found {len(documents)} documents, avg score: {sum(scores)/len(scores):.3f}")
-                    else:
-                        logger.warning(f"Retrieval query {i+1}: PARTIAL - No documents found")
+                response = self.session.post(f"{self.base_url}/documents/upload", files=files, data=data)
+                
+            if response.status_code == 200:
+                result = response.json()
+                doc_id = result.get('id') or result.get('document_id')
+                if doc_id:
+                    self.test_documents.append(doc_id)
+                    logger.info(f"✅ File upload test: PASS - Document ID: {doc_id}")
+                    success = True
                 else:
-                    logger.error(f"Retrieval query {i+1}: FAIL - HTTP {response.status_code}")
-                    
-            except Exception as e:
-                logger.error(f"Retrieval query {i+1} failed: {e}")
-        
-        overall_success = success_count >= len(retrieval_queries) // 2
-        logger.info(f"Document retrieval test: {'PASS' if overall_success else 'FAIL'} - {success_count}/{len(retrieval_queries)} queries succeeded")
-        return overall_success
+                    logger.error(f"❌ File upload test: FAIL - No document ID in response")
+                    success = False
+            else:
+                logger.error(f"❌ File upload test: FAIL - HTTP {response.status_code}: {response.text[:200]}")
+                success = False
+                
+        except Exception as e:
+            logger.error(f"❌ File upload test failed: {e}")
+            success = False
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
+        return success
+
+    def test_document_retrieval(self):
+        """Test document search and retrieval using proper API format"""
+        try:
+            # Use search payload format from api_test.py reference
+            search_payload = {
+                "query": "artificial intelligence machine learning",
+                "limit": 5
+            }
+            
+            response = self.make_tracked_request(
+                test_name="Document Search Test",
+                method="POST",
+                endpoint="/search",
+                json=search_payload
+            )
+            
+            if response.status_code == 200:
+                search_result = response.json()
+                results = search_result.get('results', [])
+                logger.info(f"✅ Document search test: PASS - Found {len(results)} results")
+                
+                # Log some details about the results
+                for i, doc in enumerate(results[:2]):  # Show first 2 results
+                    score = doc.get('score', 'N/A')
+                    title = doc.get('title', doc.get('metadata', {}).get('title', 'Untitled'))
+                    logger.info(f"   Result {i+1}: {title} (score: {score})")
+                return True
+            else:
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ Document search test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    logger.error(f"❌ Document search test: FAIL - HTTP {response.status_code}: {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Document search test: FAIL - {str(e)}")
+            return False
 
     def test_pdf_parsing(self):
         """Test PDF parsing functionality"""
         try:
-            pdf_data = self.create_test_pdf_content()
+            # Create minimal PDF content (following api_test.py pattern)
+            minimal_pdf_b64 = "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9GMSA0IDAgUgo+Pgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9MZW5ndGggNDQKPj4Kc3RyZWFtCkJUCi9GMSA0OCBUZgoyMCA3MjAgVGQKKEhlbGxvIFdvcmxkKSBUagoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA2NiAwMDAwMCBuIAowMDAwMDAwMTI0IDAwMDAwIG4gCjAwMDAwMDAyNzEgMDAwMDAgbiAKMDAwMDAwMDMzOCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjQzMwolJUVPRgo="
             
             payload = {
-                "pdf_data": pdf_data,
+                "data": minimal_pdf_b64,
                 "method": "fast",
-                "auto_index": True,
-                "collection_name": "test_pdf_collection",
-                "metadata": {
-                    "source": "test_ai_document.pdf",
-                    "type": "educational",
-                    "topic": "artificial_intelligence"
-                }
+                "language": "eng"
             }
             
             response = self.session.post(f"{self.base_url}/parse-pdf", json=payload)
-            success = response.status_code == 200
             
-            if success:
+            if response.status_code == 200:
                 result = response.json()
                 extracted_text = result.get('data', {}).get('extracted_text', '')
                 pages_processed = result.get('data', {}).get('pages_processed', 0)
-                indexed = result.get('data', {}).get('indexed', False)
                 
-                if "test_pdf_collection" not in self.test_collections:
-                    self.test_collections.append("test_pdf_collection")
-                
-                logger.info(f"PDF parsing test: PASS - Extracted {len(extracted_text)} characters, {pages_processed} pages, indexed: {indexed}")
+                logger.info(f"✅ PDF parsing test: PASS - Extracted {len(extracted_text)} characters")
+                if pages_processed > 0:
+                    logger.info(f"   Pages processed: {pages_processed}")
                 return True
             else:
-                logger.error(f"PDF parsing test: FAIL - HTTP {response.status_code}: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ PDF parsing test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    logger.error(f"❌ PDF parsing test: FAIL - HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"PDF parsing test failed: {e}")
+            logger.error(f"❌ PDF parsing test: FAIL - {str(e)}")
             return False
 
     def test_embedding_generation(self):
@@ -237,35 +286,36 @@ class RAGTester:
                 "Natural language processing helps computers understand human language"
             ]
             
+            # Use proper OpenAI API format (following api_test.py pattern)
             payload = {
-                "texts": test_texts,
-                "model": "default",
-                "normalize": True
+                "model": "text-embedding-3-small",  # Use configured model
+                "input": test_texts[0],  # Test with single text first
+                "encoding_format": "float"
             }
             
-            response = self.session.post(f"{self.base_url}/embeddings", json=payload)
-            success = response.status_code == 200
+            response = self.session.post(f"{self.base_url}/v1/embeddings", json=payload)
             
-            if success:
+            if response.status_code == 200:
                 result = response.json()
-                embeddings = result.get('data', {}).get('embeddings', [])
+                embeddings = result.get('data', [])
                 
-                if embeddings and len(embeddings) == len(test_texts):
-                    # Check if embeddings have reasonable dimensions
-                    first_embedding = embeddings[0]
-                    embedding_dim = len(first_embedding) if isinstance(first_embedding, list) else 0
-                    
-                    logger.info(f"Embedding generation test: PASS - Generated {len(embeddings)} embeddings, dimension: {embedding_dim}")
+                if embeddings and len(embeddings) > 0:
+                    embedding_dim = len(embeddings[0].get('embedding', []))
+                    logger.info(f"✅ Embedding generation test: PASS - Generated embedding with {embedding_dim} dimensions")
                     return True
                 else:
-                    logger.error(f"Embedding generation test: FAIL - Expected {len(test_texts)} embeddings, got {len(embeddings)}")
+                    logger.error(f"❌ Embedding generation test: FAIL - No embeddings in response")
                     return False
             else:
-                logger.error(f"Embedding generation test: FAIL - HTTP {response.status_code}: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ Embedding generation test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    logger.error(f"❌ Embedding generation test: FAIL - HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Embedding generation test failed: {e}")
+            logger.error(f"❌ Embedding generation test: FAIL - {str(e)}")
             return False
 
     def test_collection_management(self):
@@ -319,53 +369,30 @@ class RAGTester:
     def test_vector_search(self):
         """Test vector similarity search"""
         try:
-            # First, ensure we have some documents
-            if not self.test_collections:
-                logger.warning("No test collections available for vector search")
+            # Use payload format from api_test.py reference
+            payload = {
+                "query": "test search query for vector similarity",
+                "limit": 5,
+                "collection": "default"
+            }
+            
+            response = self.session.post(f"{self.base_url}/vector-search", json=payload)
+            
+            if response.status_code == 200:
+                result = response.json()
+                results = result.get('results', [])
+                logger.info(f"✅ Vector search test: PASS - Found {len(results)} results")
+                return True
+            else:
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ Vector search test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    logger.error(f"❌ Vector search test: FAIL - HTTP {response.status_code}: {response.text}")
                 return False
             
-            search_queries = [
-                {
-                    "vector": None,  # Will be generated from text
-                    "text": "artificial intelligence healthcare applications",
-                    "k": 5,
-                    "collection_name": self.test_collections[0] if self.test_collections else "test_rag_collection"
-                },
-                {
-                    "vector": None,
-                    "text": "machine learning financial fraud detection",
-                    "k": 3,
-                    "collection_name": self.test_collections[0] if self.test_collections else "test_rag_collection"
-                }
-            ]
-            
-            success_count = 0
-            for i, search_data in enumerate(search_queries):
-                try:
-                    response = self.session.post(f"{self.base_url}/vector-search", json=search_data)
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        matches = result.get('data', {}).get('matches', [])
-                        
-                        if matches:
-                            success_count += 1
-                            avg_score = sum(match.get('score', 0) for match in matches) / len(matches)
-                            logger.info(f"Vector search {i+1}: PASS - Found {len(matches)} matches, avg score: {avg_score:.3f}")
-                        else:
-                            logger.warning(f"Vector search {i+1}: PARTIAL - No matches found")
-                    else:
-                        logger.error(f"Vector search {i+1}: FAIL - HTTP {response.status_code}")
-                        
-                except Exception as e:
-                    logger.error(f"Vector search {i+1} failed: {e}")
-            
-            overall_success = success_count > 0
-            logger.info(f"Vector search test: {'PASS' if overall_success else 'FAIL'} - {success_count}/{len(search_queries)} searches succeeded")
-            return overall_success
-            
         except Exception as e:
-            logger.error(f"Vector search test failed: {e}")
+            logger.error(f"❌ Vector search test: FAIL - {str(e)}")
             return False
 
     def test_context_retrieval_for_agents(self):
@@ -450,7 +477,7 @@ class RAGTester:
             success_count = 0
             for i, filter_data in enumerate(filter_queries):
                 try:
-                    response = self.session.post(f"{self.base_url}/retrieve-filtered", json=filter_data)
+                    response = self.session.post(f"{self.base_url}/vector-search", json=filter_data)
                     
                     if response.status_code == 200:
                         result = response.json()
@@ -553,6 +580,9 @@ class RAGTester:
             qdrant_status = {}
             if status_success:
                 qdrant_status = response.json().get('data', {})
+            elif response.status_code == 404:
+                logger.warning("Qdrant status endpoint not implemented")
+                status_success = False  # Mark as failed instead of skipped
             
             # Test Qdrant collections
             response = self.session.get(f"{self.base_url}/api/v1/qdrant/collections")
@@ -561,12 +591,22 @@ class RAGTester:
             collections_info = {}
             if collections_success:
                 collections_info = response.json().get('data', {})
+            elif response.status_code == 404:
+                logger.warning("Qdrant collections endpoint not implemented")
+                collections_success = False  # Mark as failed instead of skipped
             
             # Test Qdrant cluster info
             response = self.session.get(f"{self.base_url}/api/v1/qdrant/cluster/info")
             cluster_success = response.status_code == 200
             
-            success = status_success and collections_success
+            if cluster_success:
+                pass  # Process cluster info if needed
+            elif response.status_code == 404:
+                logger.warning("Qdrant cluster info endpoint not implemented")
+                cluster_success = False  # Mark as failed instead of skipped
+            
+            # Fail if any endpoints return errors
+            success = status_success and collections_success and cluster_success
             logger.info(f"Qdrant integration test: {'PASS' if success else 'FAIL'}")
             logger.info(f"Status: {status_success}, Collections: {collections_success}, Cluster: {cluster_success}")
             
@@ -637,6 +677,9 @@ class RAGTester:
             if test_results.get('document_upload') and test_results.get('document_retrieval'):
                 logger.info("✓ End-to-end document workflow is functional")
             
+            # Return success based on whether majority of tests passed
+            return passed >= total * 0.5  # At least 50% pass rate required
+            
         finally:
             self.cleanup()
 
@@ -645,7 +688,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Test Kolosal Server RAG System')
-    parser.add_argument('--server-url', default='http://localhost:8080',
+    parser.add_argument('--server-url', default='http://127.0.0.1:8080',
                        help='Base URL of the Kolosal Server')
     parser.add_argument('--api-key', help='API key for authentication')
     

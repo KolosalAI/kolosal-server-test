@@ -25,19 +25,23 @@ class EmbeddingTest(KolosalTestBase):
             )
             elapsed_time = time.time() - initial_time
 
-            # Status Report
-            print(f"✅ Response received!")
-            print(f"Input text: {input_text}")
-            print(f"Embedding dimensions: {len(response.data[0].embedding)}")
-            print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
-            print(f"📊 Usage: {response.usage.total_tokens} tokens")
-            print("")
-            
-            # Return True if we have a valid embedding with expected structure
-            return bool(response.data and len(response.data) > 0 and response.data[0].embedding)
+            # Validate response structure (following api_test.py pattern)
+            if response.data and len(response.data) > 0 and response.data[0].embedding:
+                embedding_dim = len(response.data[0].embedding)
+                print(f"✅ Embedding generation test: PASS - Generated embedding with {embedding_dim} dimensions")
+                print(f"Input text: {input_text}")
+                print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
+                if hasattr(response, 'usage') and response.usage:
+                    print(f"📊 Usage: {response.usage.total_tokens} tokens")
+                print("")
+                return True
+            else:
+                print(f"❌ Embedding generation test: FAIL - No embeddings in response")
+                print("")
+                return False
             
         except Exception as e:
-            print(f"❌ Basic embedding failed: {str(e)}")
+            print(f"❌ Embedding generation test: FAIL - {str(e)}")
             print("")
             return False
 

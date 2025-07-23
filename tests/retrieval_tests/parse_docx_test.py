@@ -1,4 +1,4 @@
-"""Kolosal Server DOCX Parsing Test (Simplified)"""
+"""Kolosal Server DOCX Parsing Test with Enhanced Logging"""
 import base64
 import time
 import asyncio
@@ -14,34 +14,103 @@ class ParseDOCXTest(KolosalTestBase):
     def test_parse_docx(self,
                         path: Optional[str] = "test_files/test_docx.docx",
                         method: Optional[str] = "fast") -> None:
-        """Test parsing a DOCX file."""
+        """Test parsing a DOCX file with comprehensive logging."""
+        import os
+        
+        # Convert to absolute path if relative
+        if not os.path.isabs(path):
+            # Get the project root directory (where test_files should be)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.join(current_dir, "..", "..")
+            path = os.path.join(project_root, path)
+            path = os.path.normpath(path)
+        
+        # Log test start
+        self.log_test_start("DOCX Parsing Test", f"Testing file: {path}")
+        
+        # Check if file exists
+        if not os.path.exists(path):
+            print(f"❌ Test file not found: {path}")
+            print(f"Current working directory: {os.getcwd()}")
+            print("Looking for test_files directory...")
+            
+            # Search for test_files directory
+            test_dirs = []
+            for root, dirs, files in os.walk("."):
+                if "test_files" in dirs:
+                    test_dir = os.path.join(root, "test_files")
+                    test_dirs.append(test_dir)
+                    
+            if test_dirs:
+                print("Found test_files directories:")
+                for test_dir in test_dirs:
+                    print(f"  - {os.path.abspath(test_dir)}")
+                    if os.path.exists(test_dir):
+                        docx_files = [f for f in os.listdir(test_dir) if f.endswith('.docx')]
+                        if docx_files:
+                            print(f"    DOCX files: {docx_files}")
+            
+            raise FileNotFoundError(f"Test file not found: {path}")
+        
         # Status Report
         print(f"🚀 Testing DOCX parsing: {path}")
         print("⏳ Sending request...")
 
         initial_time = time.time()
 
-        # Open the DOCX file and send it to the Kolosal Server for parsing
-        with open(path, "rb") as docx_file:
-            docx_bytes = docx_file.read()
-            file_size_kb = len(docx_bytes) / 1024
-            b64_docx = base64.b64encode(docx_bytes).decode()
+        try:
+            # Open the DOCX file and send it to the Kolosal Server for parsing
+            with open(path, "rb") as docx_file:
+                docx_bytes = docx_file.read()
+                file_size_kb = len(docx_bytes) / 1024
+                b64_docx = base64.b64encode(docx_bytes).decode()
+        except Exception as e:
+            print(f"❌ Error reading file {path}: {str(e)}")
+            raise
 
-        # Send the DOCX to the Kolosal Server for parsing
-        api_url = f"{self.client.base_url}/parse_docx"
-
+        # Send the DOCX to the Kolosal Server for parsing with logging
         payload = {
             "data": b64_docx,
             "method": method
         }
 
-        response = requests.post(api_url, json=payload, timeout=30)
-        elapsed_time = time.time() - initial_time
+        try:
+            response = self.make_tracked_request(
+                test_name=f"DOCX Parsing - {path}",
+                method="POST",
+                endpoint="/parse-docx",
+                json_data=payload,
+                timeout=30,
+                metadata={
+                    "file_path": path,
+                    "file_size_kb": file_size_kb,
+                    "method": method
+                }
+            )
+            elapsed_time = time.time() - initial_time
+            
+            if response.status_code != 200:
+                print(f"❌ Server returned status code: {response.status_code}")
+                print(f"Response: {response.text}")
+                raise Exception(f"Failed to parse DOCX file. Status: {response.status_code}")
 
-        assert response.status_code == 200, "Failed to parse DOCX file."
+            # Extract result from response
+            try:
+                _result = response.json()
+            except Exception as e:
+                print(f"❌ Failed to parse JSON response: {str(e)}")
+                print(f"Response text: {response.text}")
+                raise Exception(f"Invalid JSON response: {str(e)}")
 
-        # Extract result from response
-        _result = response.json()
+        except requests.exceptions.Timeout:
+            print("❌ Request timed out after 30 seconds")
+            raise Exception("Request timeout")
+        except requests.exceptions.ConnectionError:
+            print("❌ Failed to connect to server")
+            raise Exception("Connection error")
+        except Exception as e:
+            print(f"❌ Request failed: {str(e)}")
+            raise
 
         kb_per_second = file_size_kb / elapsed_time if elapsed_time > 0 else 0
 
@@ -56,15 +125,68 @@ class ParseDOCXTest(KolosalTestBase):
                               docx_paths: Optional[List[str]] = None,
                               method: Optional[str] = "fast") -> None:
         """Test concurrent DOCX parsing requests using asyncio."""
+        import os
 
         if docx_paths is None:
-            docx_paths = [
+            # Get the project root directory
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.join(current_dir, "..", "..")
+            project_root = os.path.normpath(project_root)
+            
+            # Check which files actually exist
+            potential_files = [
                 "test_files/test_docx.docx",
+                "test_files/test_docx1.docx", 
                 "test_files/test_docx2.docx",
                 "test_files/test_docx3.docx",
                 "test_files/test_docx4.docx",
                 "test_files/test_docx5.docx"
             ]
+            
+            # Convert to absolute paths and check existence
+            docx_paths = []
+            for rel_path in potential_files:
+                abs_path = os.path.join(project_root, rel_path)
+                abs_path = os.path.normpath(abs_path)
+                if os.path.exists(abs_path):
+                    docx_paths.append(abs_path)
+            
+            if not docx_paths:
+                print("❌ No DOCX test files found!")
+                print(f"Searched in project root: {project_root}")
+                
+                # Search for test_files directory
+                test_files_dir = os.path.join(project_root, "test_files")
+                if os.path.exists(test_files_dir):
+                    print("Available files in test_files directory:")
+                    for file in os.listdir(test_files_dir):
+                        if file.endswith('.docx'):
+                            print(f"  - {file}")
+                            docx_paths.append(os.path.join(test_files_dir, file))
+                            
+                if not docx_paths:
+                    raise FileNotFoundError("No DOCX test files found")
+        else:
+            # Convert relative paths to absolute if needed
+            abs_paths = []
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.join(current_dir, "..", "..")
+            project_root = os.path.normpath(project_root)
+            
+            for path in docx_paths:
+                if not os.path.isabs(path):
+                    abs_path = os.path.join(project_root, path)
+                    abs_path = os.path.normpath(abs_path)
+                    abs_paths.append(abs_path)
+                else:
+                    abs_paths.append(path)
+            docx_paths = abs_paths
+        
+        # Verify all files exist
+        missing_files = [path for path in docx_paths if not os.path.exists(path)]
+        if missing_files:
+            print(f"❌ Missing files: {missing_files}")
+            raise FileNotFoundError(f"Missing test files: {missing_files}")
 
         print(
             f"🚀 Testing {len(docx_paths)} concurrent DOCX parsing requests")
@@ -73,13 +195,17 @@ class ParseDOCXTest(KolosalTestBase):
         async def single_request(docx_path, request_id):
             start_time = time.time()
 
-            # Read and encode DOCX
-            with open(docx_path, "rb") as docx_file:
-                docx_bytes = docx_file.read()
-                b64_docx = base64.b64encode(docx_bytes).decode()
-                file_size_kb = len(docx_bytes) / 1024
+            try:
+                # Read and encode DOCX
+                with open(docx_path, "rb") as docx_file:
+                    docx_bytes = docx_file.read()
+                    b64_docx = base64.b64encode(docx_bytes).decode()
+                    file_size_kb = len(docx_bytes) / 1024
+            except Exception as e:
+                print(f"❌ Error reading file {docx_path}: {str(e)}")
+                raise
 
-            api_url = f"{self.client.base_url}/parse_docx"
+            api_url = f"{self.client.base_url}/parse-docx"
             payload = {
                 "data": b64_docx,
                 "method": method

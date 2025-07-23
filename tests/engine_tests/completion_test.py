@@ -1,7 +1,8 @@
-"""OpenAI API Compatible Tests for Completion Endpoints."""
+"""OpenAI API Compatible Tests for Completion Endpoints with Enhanced Logging."""
 import time
 import asyncio
 from typing import Optional
+import json
 
 import tiktoken
 
@@ -18,13 +19,25 @@ class CompletionTest(KolosalTestBase):
                          model_name="gpt-3.5-turbo",
                          temperature: Optional[float] = 0.7,
                          max_tokens: Optional[int] = 128) -> bool:
-        """Test creating a completion."""
+        """Test creating a completion with comprehensive logging."""
+        # Log test start
+        self.log_test_start("Basic Completion Test", f"Model: {model_name}")
+        
         # Status Report
         print(f"🚀 Testing chat completion with model: {model_name}")
         print("⏳ Sending request...")
 
         try:
             initial_time = time.time()
+            
+            # Prepare request data for logging
+            request_data = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": "Hello!"}],
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            
             response = self.client.chat.completions.create(
                 model=model_name,
                 messages=[{"role": "user", "content": "Hello!"}],
@@ -33,19 +46,31 @@ class CompletionTest(KolosalTestBase):
             )
             elapsed_time = time.time() - initial_time
 
-            # Status Report
-            print(f"✅ Response received!")
-            print(f"Response: {response.choices[0].message.content}")
-            print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
-            print(
-                f"🔥 Tokens per second: {len(encoding.encode(response.choices[0].message.content)) / elapsed_time:.2f}")
-            print("")
-            
-            # Return True if we have a valid response with content
-            return bool(response.choices and response.choices[0].message.content)
+            # Validate response structure (following api_test.py pattern)
+            if response.choices and len(response.choices) > 0:
+                content = response.choices[0].message.content
+                if content:
+                    print(f"✅ Chat completion test: PASS - Generated {len(content)} characters")
+                    print(f"Response: {content}")
+                    print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
+                    try:
+                        tokens_per_sec = len(encoding.encode(content)) / elapsed_time
+                        print(f"🔥 Tokens per second: {tokens_per_sec:.2f}")
+                    except:
+                        pass  # Skip token calculation if encoding fails
+                    print("")
+                    return True
+                else:
+                    print(f"❌ Chat completion test: FAIL - No content in response")
+                    print("")
+                    return False
+            else:
+                print(f"❌ Chat completion test: FAIL - No choices in response")
+                print("")
+                return False
             
         except Exception as e:
-            print(f"❌ Basic completion failed: {str(e)}")
+            print(f"❌ Chat completion test: FAIL - {str(e)}")
             print("")
             return False
 

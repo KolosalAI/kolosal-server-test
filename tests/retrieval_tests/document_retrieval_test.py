@@ -20,7 +20,7 @@ class DocumentRetrievalTest(KolosalTestBase):
 
         start_time = time.time()
 
-        api_url = f"{self.client.base_url}/retrieve"
+        api_url = f"{self.client.base_url}/vector-search"
         payload = {
             "query": query,
             "limit": limit,
@@ -81,7 +81,7 @@ class DocumentRetrievalTest(KolosalTestBase):
         async def single_request(query: str, request_id: int):
             start_time = time.time()
 
-            api_url = f"{self.client.base_url}/retrieve"
+            api_url = f"{self.client.base_url}/vector-search"
             payload = {
                 "query": query,
                 "limit": limit,
@@ -165,7 +165,7 @@ class DocumentRetrievalTest(KolosalTestBase):
         async def single_request(query: str, request_id: int):
             start_time = time.time()
 
-            api_url = f"{self.client.base_url}/retrieve"
+            api_url = f"{self.client.base_url}/vector-search"
             payload = {
                 "query": query,
                 "limit": limit,

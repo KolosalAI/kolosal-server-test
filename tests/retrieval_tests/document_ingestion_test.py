@@ -112,6 +112,12 @@ class DocumentIngestionTest(KolosalTestBase):
             "documents": documents
         }
 
+        print(f"📤 Request URL: {api_url}")
+        print(f"📦 Request payload: {payload}")
+        print("📊 Request details:")
+        print(f"   - Number of documents: {len(documents)}")
+        print(f"   - Document categories: {[doc['metadata'].get('category', 'unknown') for doc in documents]}")
+
         response = requests.post(api_url, json=payload, timeout=30)
 
         assert response.status_code == 200, "Failed to ingest document."
