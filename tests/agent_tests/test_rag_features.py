@@ -293,7 +293,12 @@ class RAGTester:
                 "encoding_format": "float"
             }
             
-            response = self.session.post(f"{self.base_url}/v1/embeddings", json=payload)
+            response = self.make_tracked_request(
+                test_name="Generate Embeddings",
+                method="POST",
+                endpoint="/v1/embeddings",
+                json=payload
+            )
             
             if response.status_code == 200:
                 result = response.json()
@@ -376,7 +381,12 @@ class RAGTester:
                 "collection": "default"
             }
             
-            response = self.session.post(f"{self.base_url}/vector-search", json=payload)
+            response = self.make_tracked_request(
+                test_name="Vector Similarity Search",
+                method="POST",
+                endpoint="/vector-search",
+                json=payload
+            )
             
             if response.status_code == 200:
                 result = response.json()

@@ -102,8 +102,10 @@ class ParsePDFTest(KolosalTestBase):
 
     def concurrent_parse_pdf(self,
                              pdf_paths: Optional[List[str]] = None,
-                             method: Optional[str] = "fast") -> None:
-        """Test concurrent PDF parsing requests using asyncio."""
+                             method: Optional[str] = "fast") -> bool:
+        """Test concurrent PDF parsing requests using asyncio with comprehensive logging."""
+        # Log test start
+        self.log_test_start("Concurrent PDF Parsing Test", f"Method: {method}")
 
         if pdf_paths is None:
             pdf_paths = [
@@ -117,6 +119,14 @@ class ParsePDFTest(KolosalTestBase):
         print(
             f"🚀 Testing {len(pdf_paths)} concurrent PDF parsing requests")
         print("⏳ Sending concurrent requests...")
+        
+        # Log request details
+        request_config = {
+            "concurrent_requests": len(pdf_paths),
+            "method": method,
+            "file_paths": [os.path.basename(path) for path in pdf_paths]
+        }
+        print(f"📤 Request configuration: {json.dumps(request_config, indent=2)}")
 
         async def single_request(pdf_path, request_id):
             start_time = time.time()
@@ -158,25 +168,74 @@ class ParsePDFTest(KolosalTestBase):
             total_time = time.time() - start_time
             return results, total_time
 
-        results, total_time = asyncio.run(run_concurrent_requests())
+        try:
+            results, total_time = asyncio.run(run_concurrent_requests())
 
-        results.sort(key=lambda x: x[0])
+            results.sort(key=lambda x: x[0])
+            
+            # Log response summary
+            response_summary = {
+                "total_requests": len(pdf_paths),
+                "total_time": total_time,
+                "results": [
+                    {
+                        "request_id": result[0],
+                        "elapsed_time": result[1],
+                        "total_pages": result[2],
+                        "pages_per_second": result[3],
+                        "file_name": os.path.basename(result[4])
+                    } for result in results
+                ]
+            }
+            print(f"📥 Concurrent requests summary: {json.dumps(response_summary, indent=2)}")
 
-        print("✅ All PDF parsing completed!")
-        total_pages_processed = 0
-        for request_id, elapsed_time, total_pages, pages_per_second, pdf_path in results:
+            print("✅ All PDF parsing completed!")
+            total_pages_processed = 0
+            successful_requests = 0
+            
+            for request_id, elapsed_time, total_pages, pages_per_second, pdf_path in results:
+                print(
+                    f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📄 {total_pages} pages, 🔥 {pages_per_second:.2f} pages/sec")
+                print(f"PDF: {pdf_path}")
+                print("")
+                total_pages_processed += total_pages
+                successful_requests += 1
+
+            avg_time = sum(result[1] for result in results) / len(results)
+            avg_pages_per_sec = sum(result[3] for result in results) / len(results)
+            overall_pages_per_sec = total_pages_processed / total_time if total_time > 0 else 0
+
             print(
-                f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📄 {total_pages} pages, 🔥 {pages_per_second:.2f} pages/sec")
-            print(f"PDF: {pdf_path}")
+                f"📊 Average time per PDF: {avg_time:.2f}s")
+            print(
+                f"📊 Average pages per second per PDF: {avg_pages_per_sec:.2f}")
+            print(
+                f"📊 Overall pages per second: {overall_pages_per_sec:.2f}")
+            print(f"📊 Total concurrent execution time: {total_time:.2f} seconds")
+            print(f"📊 Total pages processed: {total_pages_processed}")
+            print(f"📊 Successful requests: {successful_requests}/{len(pdf_paths)}")
             print("")
-            total_pages_processed += total_pages
-
-        print(
-            f"📊 Average time per PDF: {sum(result[1] for result in results) / len(results):.2f}s")
-        print(
-            f"📊 Average pages per second per PDF: {sum(result[3] for result in results) / len(results):.2f}")
-        print(
-            f"📊 Overall pages per second: {total_pages_processed / total_time if total_time > 0 else 0:.2f}")
-        print(f"📊 Total concurrent execution time: {total_time:.2f} seconds")
-        print(f"📊 Total pages processed: {total_pages_processed}")
-        print("")
+            
+            # Log test completion
+            success_rate = successful_requests / len(pdf_paths)
+            self.log_test_end("Concurrent PDF Parsing Test", {
+                "success": success_rate >= 0.8,
+                "success_rate": success_rate,
+                "total_requests": len(pdf_paths),
+                "successful_requests": successful_requests,
+                "total_time": total_time,
+                "total_pages_processed": total_pages_processed,
+                "method": method
+            })
+            
+            return success_rate >= 0.8
+            
+        except Exception as e:
+            print(f"❌ Concurrent PDF parsing test: FAIL - {str(e)}")
+            print("")
+            self.log_test_end("Concurrent PDF Parsing Test", {
+                "success": False,
+                "error": str(e),
+                "method": method
+            })
+            return False

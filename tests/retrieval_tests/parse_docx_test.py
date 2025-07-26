@@ -2,6 +2,8 @@
 import base64
 import time
 import asyncio
+import json
+import os
 from typing import Optional, List
 import requests
 import aiohttp
@@ -123,9 +125,12 @@ class ParseDOCXTest(KolosalTestBase):
 
     def concurrent_parse_docx(self,
                               docx_paths: Optional[List[str]] = None,
-                              method: Optional[str] = "fast") -> None:
-        """Test concurrent DOCX parsing requests using asyncio."""
+                              method: Optional[str] = "fast") -> bool:
+        """Test concurrent DOCX parsing requests using asyncio with comprehensive logging."""
         import os
+        
+        # Log test start
+        self.log_test_start("Concurrent DOCX Parsing Test", f"Method: {method}")
 
         if docx_paths is None:
             # Get the project root directory
@@ -191,6 +196,14 @@ class ParseDOCXTest(KolosalTestBase):
         print(
             f"🚀 Testing {len(docx_paths)} concurrent DOCX parsing requests")
         print("⏳ Sending concurrent requests...")
+        
+        # Log request details
+        request_config = {
+            "concurrent_requests": len(docx_paths),
+            "method": method,
+            "file_paths": [os.path.basename(path) for path in docx_paths]
+        }
+        print(f"📤 Request configuration: {json.dumps(request_config, indent=2)}")
 
         async def single_request(docx_path, request_id):
             start_time = time.time()
@@ -235,25 +248,74 @@ class ParseDOCXTest(KolosalTestBase):
             total_time = time.time() - start_time
             return results, total_time
 
-        results, total_time = asyncio.run(run_concurrent_requests())
+        try:
+            results, total_time = asyncio.run(run_concurrent_requests())
 
-        results.sort(key=lambda x: x[0])
+            results.sort(key=lambda x: x[0])
+            
+            # Log response summary
+            response_summary = {
+                "total_requests": len(docx_paths),
+                "total_time": total_time,
+                "results": [
+                    {
+                        "request_id": result[0],
+                        "elapsed_time": result[1],
+                        "file_size_kb": result[2],
+                        "kb_per_second": result[3],
+                        "file_name": os.path.basename(result[4])
+                    } for result in results
+                ]
+            }
+            print(f"📥 Concurrent requests summary: {json.dumps(response_summary, indent=2)}")
 
-        print("✅ All DOCX parsing completed!")
-        total_kb_processed = 0
-        for request_id, elapsed_time, file_size_kb, kb_per_second, docx_path in results:
+            print("✅ All DOCX parsing completed!")
+            total_kb_processed = 0
+            successful_requests = 0
+            
+            for request_id, elapsed_time, file_size_kb, kb_per_second, docx_path in results:
+                print(
+                    f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📄 {file_size_kb:.2f} KB, 🔥 {kb_per_second:.2f} KB/sec")
+                print(f"DOCX: {docx_path}")
+                print("")
+                total_kb_processed += file_size_kb
+                successful_requests += 1
+
+            avg_time = sum(result[1] for result in results) / len(results)
+            avg_kb_per_sec = sum(result[3] for result in results) / len(results)
+            overall_kb_per_sec = total_kb_processed / total_time if total_time > 0 else 0
+
             print(
-                f"Request {request_id}: ⏱️ {elapsed_time:.2f}s, 📄 {file_size_kb:.2f} KB, 🔥 {kb_per_second:.2f} KB/sec")
-            print(f"DOCX: {docx_path}")
+                f"📊 Average time per DOCX: {avg_time:.2f}s")
+            print(
+                f"📊 Average KB per second per DOCX: {avg_kb_per_sec:.2f}")
+            print(
+                f"📊 Overall KB per second: {overall_kb_per_sec:.2f}")
+            print(f"📊 Total concurrent execution time: {total_time:.2f} seconds")
+            print(f"📊 Total KB processed: {total_kb_processed:.2f}")
+            print(f"📊 Successful requests: {successful_requests}/{len(docx_paths)}")
             print("")
-            total_kb_processed += file_size_kb
-
-        print(
-            f"📊 Average time per DOCX: {sum(result[1] for result in results) / len(results):.2f}s")
-        print(
-            f"📊 Average KB per second per DOCX: {sum(result[3] for result in results) / len(results):.2f}")
-        print(
-            f"📊 Overall KB per second: {total_kb_processed / total_time if total_time > 0 else 0:.2f}")
-        print(f"📊 Total concurrent execution time: {total_time:.2f} seconds")
-        print(f"📊 Total KB processed: {total_kb_processed:.2f}")
-        print("")
+            
+            # Log test completion
+            success_rate = successful_requests / len(docx_paths)
+            self.log_test_end("Concurrent DOCX Parsing Test", {
+                "success": success_rate >= 0.8,
+                "success_rate": success_rate,
+                "total_requests": len(docx_paths),
+                "successful_requests": successful_requests,
+                "total_time": total_time,
+                "total_kb_processed": total_kb_processed,
+                "method": method
+            })
+            
+            return success_rate >= 0.8
+            
+        except Exception as e:
+            print(f"❌ Concurrent DOCX parsing test: FAIL - {str(e)}")
+            print("")
+            self.log_test_end("Concurrent DOCX Parsing Test", {
+                "success": False,
+                "error": str(e),
+                "method": method
+            })
+            return False

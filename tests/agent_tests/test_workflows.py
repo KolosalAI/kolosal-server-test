@@ -46,6 +46,37 @@ class WorkflowTester:
         self.created_workflows = []
         self.created_agents = []
 
+    def make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+        """Make HTTP request with enhanced JSON response logging"""
+        url = f"{self.base_url}{endpoint}"
+        
+        # Extract test name from kwargs or use endpoint name
+        test_name = kwargs.pop('test_name', f"{method} {endpoint}")
+        
+        # Extract JSON data for logging
+        json_data = kwargs.get('json', {})
+        
+        # Log the request details
+        logger.info(f"🔄 Making request: {method} {url}")
+        if json_data:
+            logger.info(f"📤 Request payload: {json.dumps(json_data, indent=2)}")
+        
+        try:
+            response = self.session.request(method, url, **kwargs)
+            
+            # Log the response details with enhanced JSON formatting
+            logger.info(f"📥 Response status: {response.status_code}")
+            try:
+                response_json = response.json()
+                logger.info(f"📄 Response JSON: {json.dumps(response_json, indent=2)}")
+            except (json.JSONDecodeError, ValueError):
+                logger.info(f"📄 Response content (text): {response.text[:500]}...")
+            
+            return response
+        except Exception as e:
+            logger.error(f"❌ Request failed: {method} {url} - {e}")
+            raise
+
     def check_server_connectivity(self) -> bool:
         """Check if the Kolosal server is reachable and responsive"""
         try:
@@ -156,18 +187,13 @@ class WorkflowTester:
             try:
                 logger.info(f"Creating agent {i+1}/{count}: {agent_configs[i]['name']}")
                 
-                # Log the request details
-                logger.info(f"📤 Request URL: {self.base_url}{agent_endpoint}")
-                logger.info(f"📦 Request payload: {json.dumps(agent_configs[i], indent=2)}")
-                
-                response = self.session.post(f"{self.base_url}{agent_endpoint}", 
-                                           json=agent_configs[i], timeout=30)
-                
-                logger.info(f"Agent creation response: Status {response.status_code}")
+                response = self.make_request('POST', agent_endpoint, 
+                                           json=agent_configs[i], 
+                                           timeout=30,
+                                           test_name=f"Create Agent {i+1}")
                 
                 if response.status_code in [200, 201]:
                     data = response.json()
-                    logger.info(f"📥 Response data: {json.dumps(data, indent=2)}")
                     
                     # Use utility function to extract agent ID
                     agent_id = extract_id_from_response(data, "agent")
@@ -179,11 +205,9 @@ class WorkflowTester:
                         logger.error(f"❌ No agent ID found in response: {data}")
                 elif response.status_code == 404:
                     logger.error(f"❌ Agent creation endpoint not found (404). Server may not support agent creation.")
-                    logger.error(f"📥 Response: {response.text[:500]}")
                     break
                 else:
                     logger.error(f"❌ Failed to create agent: HTTP {response.status_code}")
-                    logger.error(f"📥 Response: {response.text[:500]}")
             except requests.exceptions.Timeout:
                 logger.error(f"❌ Timeout creating agent {i+1}")
             except requests.exceptions.ConnectionError:
@@ -220,8 +244,10 @@ class WorkflowTester:
         
         try:
             logger.info("Creating workflow...")
-            response = self.session.post(f"{self.base_url}/workflows", 
-                                       json=workflow_config, timeout=30)
+            response = self.make_request('POST', '/workflows', 
+                                       json=workflow_config, 
+                                       timeout=30,
+                                       test_name="Create Sequential Workflow")
             
             if response.status_code == 200:
                 data = response.json()
@@ -254,8 +280,10 @@ class WorkflowTester:
         
         try:
             logger.info(f"Executing workflow {workflow_id}...")
-            response = self.session.post(f"{self.base_url}/workflows/{workflow_id}/execute",
-                                       json=execution_payload, timeout=60)
+            response = self.make_request('POST', f'/workflows/{workflow_id}/execute',
+                                       json=execution_payload, 
+                                       timeout=60,
+                                       test_name="Execute Sequential Workflow")
             
             if response.status_code == 200:
                 data = response.json()
@@ -479,14 +507,11 @@ class WorkflowTester:
         
         try:
             # Create workflow
-            logger.info(f"📤 Creating workflow at: {self.base_url}/api/v1/orchestration/workflows")
-            logger.info(f"📦 Workflow config: {json.dumps(workflow_config, indent=2)}")
+            logger.info(f"Creating workflow at: /api/v1/orchestration/workflows")
             
-            response = self.session.post(f"{self.base_url}/api/v1/orchestration/workflows",
-                                       json=workflow_config)
-            
-            logger.info(f"📥 Workflow creation response: Status {response.status_code}")
-            logger.info(f"📥 Response content: {response.text[:1000]}")
+            response = self.make_request('POST', '/api/v1/orchestration/workflows',
+                                       json=workflow_config,
+                                       test_name="Create Sequential Workflow V1")
             
             if response.status_code not in [200, 201]:
                 logger.error(f"Failed to create sequential workflow: {response.status_code}")
@@ -505,14 +530,9 @@ class WorkflowTester:
                 }
             }
             
-            logger.info(f"📤 Executing workflow at: {self.base_url}/api/v1/orchestration/workflows/{workflow_id}/execute")
-            logger.info(f"📦 Execution payload: {json.dumps(execution_payload, indent=2)}")
-            
-            response = self.session.post(f"{self.base_url}/api/v1/orchestration/workflows/{workflow_id}/execute",
-                                       json=execution_payload)
-            
-            logger.info(f"📥 Workflow execution response: Status {response.status_code}")
-            logger.info(f"📥 Response content: {response.text[:1000]}")
+            response = self.make_request('POST', f'/api/v1/orchestration/workflows/{workflow_id}/execute',
+                                       json=execution_payload,
+                                       test_name="Execute Sequential Workflow V1")
             
             success = response.status_code == 200
             logger.info(f"Sequential workflow test: {'PASS' if success else 'FAIL'}")
@@ -607,13 +627,9 @@ class WorkflowTester:
         try:
             # Create workflow
             logger.info(f"📤 Creating parallel workflow at: {self.base_url}/api/v1/orchestration/workflows")
-            logger.info(f"📦 Parallel workflow config: {json.dumps(workflow_config, indent=2)}")
-            
-            response = self.session.post(f"{self.base_url}/api/v1/orchestration/workflows",
-                                       json=workflow_config)
-            
-            logger.info(f"📥 Parallel workflow creation response: Status {response.status_code}")
-            logger.info(f"📥 Response content: {response.text[:1000]}")
+            response = self.make_request('POST', '/api/v1/orchestration/workflows',
+                                       json=workflow_config,
+                                       test_name="Create Parallel Workflow")
             
             if response.status_code not in [200, 201]:
                 logger.error(f"Failed to create parallel workflow: {response.status_code}")

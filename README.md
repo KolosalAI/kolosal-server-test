@@ -2,12 +2,26 @@
 
 A comprehensive test suite for [Kolosal Server](https://github.com/KolosalAI/kolosal-server) that provides extensive testing capabilities for LLM completions, embeddings, document processing, and RAG functionality.
 
+## 🆕 New YAML Configuration System
+
+This test suite now uses **YAML-based configuration** for better maintainability and alignment with Kolosal Server's configuration format:
+
+- **`config/config.yaml`** - Main server and model configuration
+- **`config/agents.yaml`** - Agent system configuration  
+- **`config/sequential_workflows.yaml`** - Workflow definitions
+
+✅ **Fully backwards compatible** - existing code continues to work!
+
+📖 See [YAML_MIGRATION_GUIDE.md](YAML_MIGRATION_GUIDE.md) for detailed migration information.
+
+🧪 **Test the configuration**: `python test_yaml_config.py`
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.7 or higher
 - A running instance of [Kolosal Server](https://github.com/KolosalAI/kolosal-server)
-- Access to the server's API endpoints (default: `http://127.0.0.1:8080`)
+- Access to the server's API endpoints (configured in `config/config.yaml`)
 
 ### Installation
 
@@ -26,10 +40,16 @@ A comprehensive test suite for [Kolosal Server](https://github.com/KolosalAI/kol
    python -m venv venv
    venv\Scripts\activate  # On Windows
    pip install -r requirements.txt
+   
+   # Install PyYAML for configuration
+   pip install PyYAML
    ```
 
 ### Quick Test
 ```bash
+# Test YAML configuration
+python test_yaml_config.py
+
 # Test server connectivity
 python basic_test.py
 

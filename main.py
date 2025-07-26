@@ -17,8 +17,8 @@ from tests.engine_tests.completion_test import CompletionTest
 from tests.engine_tests.embedding_test import EmbeddingTest
 from tests.retrieval_tests.parse_pdf_test import ParsePDFTest
 from tests.retrieval_tests.parse_docx_test import ParseDOCXTest
-from tests.retrieval_tests.document_ingestion_test import DocumentIngestionTest
-from tests.retrieval_tests.document_retrieval_test import DocumentRetrievalTest
+from tests.retrieval_tests.document_ingestion_test_fixed import DocumentIngestionTest
+from tests.retrieval_tests.document_retrieval_test_fixed import DocumentRetrievalTest
 
 # Import agent test modules
 from tests.agent_tests.test_agent_features import KolosalAgentTester

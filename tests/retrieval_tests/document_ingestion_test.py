@@ -1,14 +1,19 @@
 """Document Ingestion tests for the Kolosal server."""
 from typing import List, Optional, Dict
 import requests
+import json
+import time
 from tests.kolosal_tests import KolosalTestBase
 
 
 class DocumentIngestionTest(KolosalTestBase):
     """Test class for document ingestion functionality in Kolosal Server."""
 
-    def test_ingest_document(self, documents: Optional[List[Dict[str, str]]] = None) -> None:
-        """Test ingesting a document into the Kolosal Server."""
+    def test_ingest_document(self, documents: Optional[List[Dict[str, str]]] = None) -> bool:
+        """Test ingesting a document into the Kolosal Server with comprehensive logging."""
+        # Log test start
+        self.log_test_start("Document Ingestion Test", "Testing document upload and indexing")
+        
         if documents is None:
             documents = [
                 {
@@ -106,24 +111,58 @@ class DocumentIngestionTest(KolosalTestBase):
         print("🚀 Testing document ingestion...")
         print("⏳ Sending request...")
 
-        api_url = f"{self.client.base_url}/add_documents"
+        try:
+            initial_time = time.time()
+            
+            # Use the enhanced request tracking method
+            response = self.make_tracked_request(
+                test_name="Document Ingestion",
+                method="POST",
+                endpoint="/add-documents",
+                json_data={"documents": documents},
+                timeout=30,
+                metadata={
+                    "document_count": len(documents),
+                    "categories": list(set(doc['metadata'].get('category', 'unknown') for doc in documents))
+                }
+            )
+            elapsed_time = time.time() - initial_time
 
-        payload = {
-            "documents": documents
-        }
-
-        print(f"📤 Request URL: {api_url}")
-        print(f"📦 Request payload: {payload}")
-        print("📊 Request details:")
-        print(f"   - Number of documents: {len(documents)}")
-        print(f"   - Document categories: {[doc['metadata'].get('category', 'unknown') for doc in documents]}")
-
-        response = requests.post(api_url, json=payload, timeout=30)
-
-        assert response.status_code == 200, "Failed to ingest document."
-
-        result = response.json()
-
-        print("✅ Document ingestion completed!")
-        print(f"📄 Response: {result}")
-        print("")
+            if response.status_code == 200:
+                result = response.json()
+                print("✅ Document ingestion test: PASS")
+                print(f"� Response: {json.dumps(result, indent=2)}")
+                print(f"⏱️ Elapsed time: {elapsed_time:.2f} seconds")
+                print("")
+                
+                # Log test completion
+                self.log_test_end("Document Ingestion Test", {
+                    "success": True,
+                    "document_count": len(documents),
+                    "elapsed_time": elapsed_time,
+                    "response": result
+                })
+                return True
+            else:
+                try:
+                    error_data = response.json()
+                    print(f"❌ Document ingestion test: FAIL - HTTP {response.status_code}: {json.dumps(error_data)}")
+                except:
+                    print(f"❌ Document ingestion test: FAIL - HTTP {response.status_code}: {response.text}")
+                print("")
+                
+                self.log_test_end("Document Ingestion Test", {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}",
+                    "response": response.text[:500]
+                })
+                return False
+                
+        except Exception as e:
+            print(f"❌ Document ingestion test: FAIL - {str(e)}")
+            print("")
+            self.log_test_end("Document Ingestion Test", {
+                "success": False,
+                "error": str(e)
+            })
+            return False
